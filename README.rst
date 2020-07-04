@@ -169,20 +169,21 @@ Slurm is well-suited for distributed training. Jobs can run multiple tasks on
 multiple nodes, where each task handles one or more GPUs. Userdocker can be
 configured to add make setup easier.
 
-  #. The first node hosts rank0, which usually handles the organization of the
-     process group. Userdocker adds the first node from SLURM_NODELIST as
-     USERDOCKER_FIRST_NODE envionment variable to the docker command line.
-  #. Set SLURM_MAP_PORT to tell userdocker to derive a PORT from the
-     SLURM_SRUN_COMM_PORT environment variable. A port mapping -p PORT:PORT
-     and USERDOCKER_MAPPED_PORT=PORT are added to the command line. Use with
-     USERDOCKER_FIRST_NODE to connect to the rank0 process.
-  #. Slurm uses CUDA_VISIBLE_DEVICES instead of NV_GPU to assign GPUs to tasks.
-     Set NV_USE_CUDA_VISIBLE_DEVICES to make userdocker use it as a fallback
-     when NV_GPU is not defined.
-  #. Slurm does not (yet) bind GPUs to tasks. Set SLURM_BIND_GPU to let
-     userdocker distribute and bind them by setting NV_GPU for the container.
+#. The first node hosts rank0, which usually handles the organization of the
+   process group. Userdocker adds the first node from SLURM_NODELIST as
+   USERDOCKER_FIRST_NODE envionment variable to the docker command line.
+#. Set SLURM_MAP_PORT to tell userdocker to derive a PORT from the
+   SLURM_SRUN_COMM_PORT environment variable. A port mapping -p PORT:PORT
+   and USERDOCKER_MAPPED_PORT=PORT are added to the command line. Use with
+   USERDOCKER_FIRST_NODE to connect to the rank0 process.
+#. Slurm uses CUDA_VISIBLE_DEVICES instead of NV_GPU to assign GPUs to tasks.
+   Set NV_USE_CUDA_VISIBLE_DEVICES to make userdocker use it as a fallback
+   when NV_GPU is not defined.
+#. Slurm does not (yet) bind GPUs to tasks. Set SLURM_BIND_GPU to let
+   userdocker distribute and bind them by setting NV_GPU for the container.
 
-For multi-node training with infiniband, add the devices to ARGS_ALWAYS, e.g.::
+For multi-node training with infiniband, add the devices to ADDITIONAL_ARGS,
+e.g.::
 
     ADDITIONAL_ARGS = [
         '--device=/dev/infiniband/rdma_cm',
