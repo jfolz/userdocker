@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import re
+import hashlib
 
 from .. import __version__
 from ..config import ALLOWED_IMAGE_REGEXPS
@@ -16,12 +17,18 @@ from ..config import NV_ALLOW_OWN_GPU_REUSE
 from ..config import NV_ALLOWED_GPUS
 from ..config import NV_DEFAULT_GPU_COUNT_RESERVATION
 from ..config import NV_MAX_GPU_COUNT_RESERVATION
+from ..config import NV_USE_CUDA_VISIBLE_DEVICES
+from ..config import SLURM_BIND_GPU
+from ..config import SLURM_MAP_PORT
+from ..config import SLURM_MAP_PORT_MIN
+from ..config import SLURM_MAP_PORT_MAX
 from ..config import PROBE_USED_MOUNTS
 from ..config import RUN_PULL
 from ..config import USER_IN_CONTAINER
 from ..config import VOLUME_MOUNTS_ALWAYS
 from ..config import VOLUME_MOUNTS_AVAILABLE
 from ..config import VOLUME_MOUNTS_DEFAULT
+from ..config import ADDITIONAL_ARGS
 from ..config import gid
 from ..config import uid
 from ..config import user_name
@@ -92,6 +99,17 @@ def parser_run(parser):
     )
 
 
+def getenv_raise(key, default=None, msg='{} environment variable is not set'):
+    v = os.getenv(key, default)
+    if v is None:
+        raise UserDockerException(msg.format(key))
+    return v
+
+
+def is_slurm_job():
+    return 'SLURM_JOBID' in os.environ and 'SLURM_TASK_PID' in os.environ
+
+
 def prepare_nvidia_docker_run(args):
     # mainly handles GPU arbitration via ENV var for nvidia-docker
     # note that these are ENV vars for the command, not the container
@@ -105,7 +123,12 @@ def prepare_nvidia_docker_run(args):
             "ERROR: No GPUs available due to admin setting."
         )
 
-    nv_gpus = os.getenv('NV_GPU', '')
+    # depending on config try CUDA_VISIBLE_DEVICES first (used by slurm)
+    nv_gpus = ''
+    if NV_USE_CUDA_VISIBLE_DEVICES:
+        nv_gpus = os.getenv('CUDA_VISIBLE_DEVICES', nv_gpus)
+    # then NV_GPU (normal nvidia-docker env var)
+    nv_gpus = os.getenv('NV_GPU', nv_gpus)
     if nv_gpus:
         # the user has set NV_GPU, just check if it's ok
         nv_gpus = [g.strip() for g in nv_gpus.split(',')]
@@ -155,8 +178,8 @@ def prepare_nvidia_docker_run(args):
             "default of %d GPUs" % gpu_default
         )
         gpus_available, own_gpus = nvidia_get_available_gpus(args.executor_path)
-        gpus = gpus_available[:gpu_default]
-        if len(gpus) < gpu_default:
+        nv_gpus = gpus_available[:gpu_default]
+        if len(nv_gpus) < gpu_default:
             msg = (
                 'Could not find %d available GPU(s)!\nUse:\n'
                 '"sudo userdocker ps --gpu-used" and "nvidia-smi" to see '
@@ -166,13 +189,40 @@ def prepare_nvidia_docker_run(args):
                 msg += '\n You can set NV_GPU to reuse a GPU you have already' \
                        ' reserved.'
             raise UserDockerException(msg)
-        gpu_env = ",".join([str(g) for g in gpus])
+        gpu_env = ",".join([str(g) for g in nv_gpus])
         logger.info("Setting NV_GPU=%s" % gpu_env)
-        os.environ['NV_GPU'] = gpu_env
+
+    # for slurm jobs distribute nv_gpus to tasks on this node
+    if SLURM_BIND_GPU and is_slurm_job():
+        # TODO check SLURM_LOCALID for single task jobs
+        local_id = int(getenv_raise('SLURM_LOCALID', 0))
+        # TODO check SLURM_NTASKS_PER_NODE for single task jobs
+        tasks = int(getenv_raise('SLURM_NTASKS_PER_NODE', 1))
+        step = tasks / len(nv_gpus)
+        if step % 1 != 0:
+            logger.warning('cannot distribute %d GPUs evenly to %d tasks'
+                           % (len(nv_gpus), tasks))
+        first = int(round(local_id*step))
+        last = int(round((local_id+1)*step))
+        nv_gpus = nv_gpus[first:last]
+
+    gpu_env = ",".join([str(g) for g in nv_gpus])
+    os.environ['NV_GPU'] = gpu_env
+
+
+def slurm_get_mapped_port():
+    slurm_port = getenv_raise('SLURM_SRUN_COMM_PORT')
+    mapped_port = int(hashlib.sha1(slurm_port.encode('ascii')).hexdigest(), 16)
+    delta = SLURM_MAP_PORT_MAX - SLURM_MAP_PORT_MIN
+    mapped_port = (mapped_port - SLURM_MAP_PORT_MIN) % delta + SLURM_MAP_PORT_MIN
+    return mapped_port
 
 
 def exec_cmd_run(args):
     cmd = init_cmd(args)
+
+    # add additional args first
+    cmd.extend(ADDITIONAL_ARGS)
 
     # check port mappings
     for pm in getattr(args, 'port_mappings', []):
@@ -185,6 +235,13 @@ def exec_cmd_run(args):
                 "ERROR: given port mapping not allowed: %s" % pm
             )
 
+    # slurm port mapping
+    if SLURM_MAP_PORT and is_slurm_job():
+        mapped_port = slurm_get_mapped_port()
+        first_node = getenv_raise('SLURM_NODELIST').split(',')[0]
+        cmd += ['-p', '%d:%d' % (mapped_port, mapped_port),
+                '-e', 'USERDOCKER_FIRST_NODE=%s' % first_node,
+                '-e', 'USERDOCKER_MAPPED_PORT=%s' % mapped_port]
 
     # check mounts
     mounts = []

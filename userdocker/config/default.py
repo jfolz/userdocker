@@ -118,6 +118,10 @@ ARGS_AVAILABLE = {
 }
 
 
+# Add arguments here that should always be added to the command line.
+ADDITIONAL_ARGS = []
+
+
 # Volume mounts:
 # - VOLUME_MOUNTS_ALWAYS will be mounted whether the user wants it or not
 # - VOLUME_MOUNTS_AVAILABLE will only be mounted if the user explicitly
@@ -243,3 +247,19 @@ NV_MAX_GPU_COUNT_RESERVATION = -1
 NV_GPU_UNAVAILABLE_ABOVE_MEMORY_USED = 0
 NV_EXCLUSIVE_CONTAINER_GPU_RESERVATION = True
 NV_ALLOW_OWN_GPU_REUSE = True
+NV_USE_CUDA_VISIBLE_DEVICES = True
+
+
+# slurm specific options
+# - SLURM_BIND_GPU distributes available GPUs exclusively to the tasks on a node
+#   and sets NV_GPU for the container.
+# - SLURM_MAP_PORT adds a port mapping based on the SLURM_SRUN_COMM_PORT
+#   environment variable. The result is identical for all tasks on all nodes
+#   and accessible as USERDOCKER_MAPPED_PORT environment variable.
+#   Also sets USERDOCKER_FIRST_NODE to the first node in the job.
+# - SLURM_MAP_PORT_MIN is the lowest value for USERDOCKER_MAPPED_PORT.
+# - SLURM_MAP_PORT_MAX is the highest value for USERDOCKER_MAPPED_PORT.
+SLURM_BIND_GPU = True
+SLURM_MAP_PORT = True
+SLURM_MAP_PORT_MIN = 10000
+SLURM_MAP_PORT_MAX = 32768
