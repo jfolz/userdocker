@@ -73,17 +73,17 @@ Features:
 - Support for several docker commands / plugins (docker, nvidia-docker)
 - Fine granular configurability for admins in ``/etc/userdocker/`` allows to:
 
-   - restrict runnable images if desired (allows admin reviews)
-   - restrict run to locally available images
-   - restrict available mount points (or enforce them, or default mount)
-   - probe mounts (to make sure nfs automounts don't make docker sad)
-   - enforce non-root user in container (same uid:gid as on host)
-   - enforce dropping caps
-   - enforce environment vars
-   - enforce docker args
-   - restrict port publishing
-   - explicitly white-list available args to user
-   - restrict allowed GPU access / reservations via ``NV_GPU``
+  - restrict runnable images if desired (allows admin reviews)
+  - restrict run to locally available images
+  - restrict available mount points (or enforce them, or default mount)
+  - probe mounts (to make sure nfs automounts don't make docker sad)
+  - enforce non-root user in container (same uid:gid as on host)
+  - enforce dropping caps
+  - enforce environment vars
+  - enforce docker args
+  - restrict port publishing
+  - explicitly white-list available args to user
+  - restrict allowed GPU access / reservations via ``NV_GPU``
 
 - System wide config + overrides for individual groups, gids, users, uids.
 - Easy extensibility for further subcommands and args.
