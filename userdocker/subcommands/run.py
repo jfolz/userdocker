@@ -216,11 +216,12 @@ def slurm_get_mapped_port():
     mapped_port = int(hashlib.sha1(slurm_port.encode('ascii')).hexdigest(), 16)
     delta = SLURM_MAP_PORT_MAX - SLURM_MAP_PORT_MIN
     mapped_port = (mapped_port - SLURM_MAP_PORT_MIN) % delta + SLURM_MAP_PORT_MIN
-    try:
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).bind(('0.0.0.0', mapped_port))
-        return mapped_port
-    except OSError:
-        raise UserDockerException('USERDOCKER_MAPPED_PORT not available, try again')
+    if getenv_raise('SLURM_PROCID') == 0:
+        try:
+            socket.socket(socket.AF_INET, socket.SOCK_STREAM).bind(('0.0.0.0', mapped_port))
+        except OSError:
+            raise UserDockerException('USERDOCKER_MAPPED_PORT not available, try again')
+    return mapped_port
 
 
 def exec_cmd_run(args):
