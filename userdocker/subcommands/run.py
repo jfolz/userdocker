@@ -216,7 +216,7 @@ def slurm_get_mapped_port():
     mapped_port = int(hashlib.sha1(slurm_port.encode('ascii')).hexdigest(), 16)
     delta = SLURM_MAP_PORT_MAX - SLURM_MAP_PORT_MIN
     mapped_port = (mapped_port - SLURM_MAP_PORT_MIN) % delta + SLURM_MAP_PORT_MIN
-    if getenv_raise('SLURM_PROCID') == 0:
+    if int(getenv_raise('SLURM_PROCID')) == 0:
         try:
             socket.socket(socket.AF_INET, socket.SOCK_STREAM).bind(('0.0.0.0', mapped_port))
         except OSError:
@@ -244,9 +244,11 @@ def exec_cmd_run(args):
     # slurm port mapping
     if SLURM_MAP_PORT and is_slurm_job():
         mapped_port = slurm_get_mapped_port()
+        # only process with ID 0 binds port
+        if int(getenv_raise('SLURM_PROCID')) == 0:
+            cmd += ['-p', '%d:%d' % (mapped_port, mapped_port)]
         first_node = getenv_raise('SLURM_NODELIST').split(',')[0]
-        cmd += ['-p', '%d:%d' % (mapped_port, mapped_port),
-                '-e', 'USERDOCKER_FIRST_NODE=%s' % first_node,
+        cmd += ['-e', 'USERDOCKER_FIRST_NODE=%s' % first_node,
                 '-e', 'USERDOCKER_MAPPED_PORT=%s' % mapped_port]
 
     # check mounts
