@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import hashlib
+import socket
 
 from .. import __version__
 from ..config import ALLOWED_IMAGE_REGEXPS
@@ -215,7 +216,11 @@ def slurm_get_mapped_port():
     mapped_port = int(hashlib.sha1(slurm_port.encode('ascii')).hexdigest(), 16)
     delta = SLURM_MAP_PORT_MAX - SLURM_MAP_PORT_MIN
     mapped_port = (mapped_port - SLURM_MAP_PORT_MIN) % delta + SLURM_MAP_PORT_MIN
-    return mapped_port
+    try:
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).bind(('0.0.0.0', mapped_port))
+        return mapped_port
+    except OSError:
+        raise UserDockerException('USERDOCKER_MAPPED_PORT not available, try again')
 
 
 def exec_cmd_run(args):
