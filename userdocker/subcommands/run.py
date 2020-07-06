@@ -248,8 +248,17 @@ def exec_cmd_run(args):
         if int(getenv_raise('SLURM_PROCID')) == 0:
             cmd += ['-p', '%d:%d' % (mapped_port, mapped_port)]
         first_node = getenv_raise('SLURM_NODELIST').split(',')[0]
-        cmd += ['-e', 'USERDOCKER_FIRST_NODE=%s' % first_node,
-                '-e', 'USERDOCKER_MAPPED_PORT=%s' % mapped_port]
+        try:
+            ip_addr = socket.gethostbyname(first_node)
+        except socket.gaierror:
+            raise UserDockerException(
+                'could not resolve address of first node "%r"' % first_node
+            )
+        cmd += ['-e', 'USERDOCKER_FIRST_NODE=%s' % ip_addr,
+                '-e', 'USERDOCKER_MAPPED_PORT=%s' % mapped_port,
+                '-e', 'SLURM_PROCID=%s' % getenv_raise('SLURM_PROCID'),
+                '-e', 'SLURM_NTASKS=%s' % getenv_raise('SLURM_NTASKS'),
+                '-e', 'SLURM_NNODES=%s' % getenv_raise('SLURM_NNODES')]
 
     # check mounts
     mounts = []
