@@ -266,7 +266,7 @@ def exec_cmd_run(args):
                     '-e', 'NCCL_COMM_ID=0.0.0.0:%d' % nccl_port]
         # other processes use first node to establish connection
         else:
-            cmd += ['-e', 'NCCL_COMM_ID=%s:%d' % (first_node, nccl_port)]
+            cmd += ['-e', 'NCCL_COMM_ID=%s:%d' % (ip_addr, nccl_port)]
         # env vars for process
         cmd += ['-e', 'USERDOCKER_FIRST_NODE=%s' % ip_addr,
                 '-e', 'USERDOCKER_MAPPED_PORT=%s' % mapped_port,
