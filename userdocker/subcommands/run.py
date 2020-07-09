@@ -211,17 +211,24 @@ def prepare_nvidia_docker_run(args):
     os.environ['NV_GPU'] = gpu_env
 
 
-def slurm_get_mapped_port():
+def test_port(port, name):
+    try:
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).bind(('0.0.0.0', port))
+    except OSError:
+        raise UserDockerException('%s not available, try again' % name)
+
+
+def slurm_get_mapped_ports():
     slurm_port = getenv_raise('SLURM_SRUN_COMM_PORT')
     mapped_port = int(hashlib.sha1(slurm_port.encode('ascii')).hexdigest(), 16)
     delta = SLURM_MAP_PORT_MAX - SLURM_MAP_PORT_MIN
     mapped_port = (mapped_port - SLURM_MAP_PORT_MIN) % delta + SLURM_MAP_PORT_MIN
+    nccl_port = int(hashlib.sha1(bytes(mapped_port)).hexdigest(), 16)
+    nccl_port = (nccl_port - SLURM_MAP_PORT_MIN) % delta + SLURM_MAP_PORT_MIN
     if int(getenv_raise('SLURM_PROCID')) == 0:
-        try:
-            socket.socket(socket.AF_INET, socket.SOCK_STREAM).bind(('0.0.0.0', mapped_port))
-        except OSError:
-            raise UserDockerException('USERDOCKER_MAPPED_PORT not available, try again')
-    return mapped_port
+        test_port(mapped_port, 'USERDOCKER_MAPPED_PORT')
+        test_port(nccl_port, 'NCCL_COMM_ID')
+    return mapped_port, nccl_port
 
 
 def exec_cmd_run(args):
@@ -241,12 +248,10 @@ def exec_cmd_run(args):
                 "ERROR: given port mapping not allowed: %s" % pm
             )
 
-    # slurm port mapping
+    # slurm port mapping & communication
     if SLURM_MAP_PORT and is_slurm_job():
-        mapped_port = slurm_get_mapped_port()
-        # only process with ID 0 binds port
-        if int(getenv_raise('SLURM_PROCID')) == 0:
-            cmd += ['-p', '%d:%d' % (mapped_port, mapped_port)]
+        mapped_port, nccl_port = slurm_get_mapped_ports()
+        # get first node and resolve name to IP address
         first_node = getenv_raise('SLURM_NODELIST').split(',')[0]
         try:
             ip_addr = socket.gethostbyname(first_node)
@@ -254,6 +259,15 @@ def exec_cmd_run(args):
             raise UserDockerException(
                 'could not resolve address of first node "%r"' % first_node
             )
+        # only process with ID 0 binds port
+        if int(getenv_raise('SLURM_PROCID')) == 0:
+            cmd += ['-p', '%d:%d' % (mapped_port, mapped_port),
+                    '-p', '%d:%d' % (nccl_port, nccl_port),
+                    '-e', 'NCCL_COMM_ID=0.0.0.0:%d' % nccl_port]
+        # other processes use first node to establish connection
+        else:
+            cmd += ['-e', 'NCCL_COMM_ID=%s:%d' % (first_node, nccl_port)]
+        # env vars for process
         cmd += ['-e', 'USERDOCKER_FIRST_NODE=%s' % ip_addr,
                 '-e', 'USERDOCKER_MAPPED_PORT=%s' % mapped_port,
                 '-e', 'SLURM_PROCID=%s' % getenv_raise('SLURM_PROCID'),
