@@ -262,13 +262,10 @@ def exec_cmd_run(args):
         # only process with ID 0 binds port
         if int(getenv_raise('SLURM_PROCID')) == 0:
             cmd += ['-p', '%d:%d' % (mapped_port, mapped_port),
-                    '-p', '%d:%d' % (nccl_port, nccl_port),
-                    '-e', 'NCCL_COMM_ID=0.0.0.0:%d' % nccl_port]
-        # other processes use first node to establish connection
-        else:
-            cmd += ['-e', 'NCCL_COMM_ID=%s:%d' % (ip_addr, nccl_port)]
+                    '-p', '%d:%d' % (nccl_port, nccl_port)]
         # env vars for process
-        cmd += ['-e', 'USERDOCKER_FIRST_NODE=%s' % ip_addr,
+        cmd += ['-e', 'NCCL_COMM_ID=%s:%d' % (ip_addr, nccl_port),
+                '-e', 'USERDOCKER_FIRST_NODE=%s' % ip_addr,
                 '-e', 'USERDOCKER_MAPPED_PORT=%s' % mapped_port,
                 '-e', 'SLURM_PROCID=%s' % getenv_raise('SLURM_PROCID'),
                 '-e', 'SLURM_NTASKS=%s' % getenv_raise('SLURM_NTASKS'),
