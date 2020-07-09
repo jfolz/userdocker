@@ -263,7 +263,7 @@ def exec_cmd_run(args):
         if int(getenv_raise('SLURM_PROCID')) == 0:
             cmd += ['-p', '%d:%d' % (mapped_port, mapped_port),
                     '-p', '%d:%d' % (nccl_port, nccl_port),
-                    '-e', 'NCCL_COMM_ID=:%d' % nccl_port]
+                    '-e', 'NCCL_COMM_ID=%s:%d' % (first_node, nccl_port)]
         # other processes use first node to establish connection
         else:
             cmd += ['-e', 'NCCL_COMM_ID=%s:%d' % (ip_addr, nccl_port)]
