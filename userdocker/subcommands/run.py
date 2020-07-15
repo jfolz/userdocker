@@ -230,9 +230,11 @@ def exec_cmd_run(args):
 
     # slurm port mapping & communication
     if SLURM_MAP_PORT and is_slurm_job():
-        # env vars for process
-        cmd += ['--ip=10.0.0.%s' % getenv_raise('SLURM_PROCID'),
-                '-e', 'SLURM_PROCID=%s' % getenv_raise('SLURM_PROCID'),
+        procid = int(getenv_raise('SLURM_PROCID'))
+        # IP address and env vars for process
+        cmd += ['--ip=10.0.0.%d' % (procid+2),
+                '-e', 'USERDOCKER_RANK0_ADDRESS=10.0.0.2',
+                '-e', 'SLURM_PROCID=%s' % procid,
                 '-e', 'SLURM_NTASKS=%s' % getenv_raise('SLURM_NTASKS'),
                 '-e', 'SLURM_NNODES=%s' % getenv_raise('SLURM_NNODES')]
 
