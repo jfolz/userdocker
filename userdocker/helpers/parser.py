@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
-import sys
 import argparse
+from functools import partial
+from fnmatch import fnmatch
 
 from ..config import ARGS_ALWAYS
 from ..config import ARGS_AVAILABLE
@@ -18,6 +19,15 @@ class _PatchThroughAssignmentAction(argparse._AppendAction):
             parser, namespace,
             values=option_string + '=' + values,
             option_string=option_string)
+
+
+def _glob_value(pattern, value):
+    """Return value if it matches the given GLOB pattern,
+    else raise ArgumentTypeError.
+    """
+    if fnmatch(value, pattern):
+        return value
+    raise argparse.ArgumentTypeError("value must match pattern %r" % pattern)
 
 
 def init_subcommand_parser(parent_parser, scmd):
@@ -72,9 +82,12 @@ def init_subcommand_parser(parent_parser, scmd):
             kwds = {
                 "help": h,
                 "action": _PatchThroughAssignmentAction,
-                "choices": [val],
                 "dest": "patch_through_args",
             }
+            if "*" in val:
+                kwds["type"] = partial(_glob_value, val)
+            else:
+                kwds["choices"] = [val]
         else:
             kwds = {
                 "help": h,

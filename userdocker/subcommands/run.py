@@ -2,10 +2,8 @@
 
 import argparse
 import logging
-import sys
 import os
 import re
-import time
 import ipaddress
 
 from .. import __version__
@@ -21,9 +19,7 @@ from ..config import NV_DEFAULT_GPU_COUNT_RESERVATION
 from ..config import NV_MAX_GPU_COUNT_RESERVATION
 from ..config import NV_USE_CUDA_VISIBLE_DEVICES
 from ..config import SLURM_BIND_GPU
-from ..config import SLURM_CREATE_NETWORK
 from ..config import SLURM_NETWORK_SUBNET
-from ..config import SLURM_NETWORK_IPRANGE
 from ..config import SLURM_NETWORK_ADDRESS_OFFSET
 from ..config import PROBE_USED_MOUNTS
 from ..config import RUN_PULL
@@ -213,40 +209,6 @@ def prepare_nvidia_docker_run(args):
     os.environ['NV_GPU'] = gpu_env
 
 
-def network_name():
-    slurm_jobid = getenv_raise('SLURM_JOBID')
-    return user_name + slurm_jobid
-    # slurm_port = getenv_raise('SLURM_SRUN_COMM_PORT')
-    # data = (slurm_jobid+slurm_port).encode('ascii')
-    # return username + hashlib.sha1(data).hexdigest()
-
-
-def establish_network(args):
-    procid = int(getenv_raise('SLURM_PROCID'))
-    name = network_name()
-    if procid == 0:
-        cmd = [
-            'docker', 'network', 'create',
-            '--driver=overlay',
-            '--attachable',
-            '--subnet=%s' % SLURM_NETWORK_SUBNET,
-            '--ip-range=%s' % SLURM_NETWORK_IPRANGE,
-            name
-        ]
-        exit_exec_cmd(cmd, dry_run=args.dry_run)
-    return name
-
-
-def prune_network(args):
-    procid = int(getenv_raise('SLURM_PROCID'))
-    if procid == 0:
-        name = network_name()
-        cmd = ['docker', 'network', 'rm', name]
-        return exec_cmd(cmd, dry_run=args.dry_run)
-    else:
-        return 0
-
-
 def ip_address(procid):
     # TODO IPv6
     net = SLURM_NETWORK_SUBNET.partition('/')[0].split('.')
@@ -295,15 +257,14 @@ def exec_cmd_run(args):
             '-e', 'SLURM_NNODES=%d' % nnodes,
             '-e', 'SLURM_NTASKS=%d' % ntasks,
         ]
-        if SLURM_CREATE_NETWORK and nnodes > 1:
-            if procid == 0:
-                network = establish_network(args)
-            else:
-                network = network_name()
-                time.sleep(1)
+
+    # if network arg is defined, add ip address
+    for arg in args.patch_through_args:
+        if arg.startswith("--network"):
+            _, _, network = arg.partition("=")
+            procid = int(getenv_raise('SLURM_PROCID'))
             cmd += [
                 '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(0),
-                '--network=%s' % network,
                 '--ip=%s' % ip_address(procid),
             ]
 
@@ -445,7 +406,4 @@ def exec_cmd_run(args):
     cmd.append(img)
     cmd.extend(args.image_args)
 
-    ret = exec_cmd(cmd, dry_run=args.dry_run)
-    if is_slurm_job():
-        ret = ret or prune_network(args)
-    sys.exit(ret)
+    exit_exec_cmd(cmd, dry_run=args.dry_run)

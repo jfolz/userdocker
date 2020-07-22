@@ -60,11 +60,30 @@ ALLOWED_SUBCOMMANDS = [
     'dockviz',  # tree visualization of images
     'images',
     'load',  # see RUN_PULL as well
+    'network',
     'ps',
     'pull',  # see RUN_PULL as well
     'run',
     'version',
 ]
+
+# slurm specific options
+# - SLURM_BIND_GPU distributes available GPUs exclusively to the tasks on a node
+#   and sets NV_GPU for the container.
+# - SLURM_CREATE_NETWORK creates an attachable overlay network if SLURM_NNODES is
+#   greater than 1. Each container will attach to this network to enable
+#   communication between them. Each container is assigned an IP address based
+#   on its SLURM_PROCID (from ). The env var USERDOCKER_RANK0_ADDRESS is defined
+#   and gives the IP address of the container with rank 0.
+# - SLURM_NETWORK_SUBNET is the subnet specification for the overlay network.
+# - SLURM_NETWORK_IPRANGE is the range of IP addresses docker can use for services
+#   on the overlay network. Must be separate from SLURM_NETWORK_SUBNET.
+# - SLURM_NETWORK_ADDRESS_OFFSET is added to the last part of the container IP
+#   address to avoid "X.Y.Z.0" for SLURM_PROCID 0.
+SLURM_BIND_GPU = True
+SLURM_NETWORK_SUBNET = '10.0.0.0/16'
+SLURM_NETWORK_IPRANGE = '10.0.255.0/24'
+SLURM_NETWORK_ADDRESS_OFFSET = 10
 
 # Arguments that you want to enforce on the user:
 # Do not include args that are handled below (e.g. run -v, -p, --cap-drop)!
@@ -76,6 +95,12 @@ ARGS_ALWAYS = {
         '--rm',
         # '--shm-size=1g',
     ],
+    'network': [
+        '--attachable',
+        '--driver=overlay',
+        '--subnet=%s' % SLURM_NETWORK_SUBNET,
+        '--ip-range=%s' % SLURM_NETWORK_IPRANGE,
+    ]
 }
 
 # The following arguments are available to the user for the
@@ -114,6 +139,7 @@ ARGS_AVAILABLE = {
         # users can map all exposed container ports to random free host ports:
         ('-P', '--publish-all'),
         # '--shm-size=16g',  # allows users to set shared mem size
+        '--network=%s*' % user_name,
     ],
 }
 
@@ -248,23 +274,3 @@ NV_GPU_UNAVAILABLE_ABOVE_MEMORY_USED = 0
 NV_EXCLUSIVE_CONTAINER_GPU_RESERVATION = True
 NV_ALLOW_OWN_GPU_REUSE = True
 NV_USE_CUDA_VISIBLE_DEVICES = True
-
-
-# slurm specific options
-# - SLURM_BIND_GPU distributes available GPUs exclusively to the tasks on a node
-#   and sets NV_GPU for the container.
-# - SLURM_CREATE_NETWORK creates an attachable overlay network if SLURM_NNODES is
-#   greater than 1. Each container will attach to this network to enable
-#   communication between them. Each container is assigned an IP address based
-#   on its SLURM_PROCID (from ). The env var USERDOCKER_RANK0_ADDRESS is defined
-#   and gives the IP address of the container with rank 0.
-# - SLURM_NETWORK_SUBNET is the subnet specification for the overlay network.
-# - SLURM_NETWORK_IPRANGE is the range of IP addresses docker can use for services
-#   on the overlay network. Must be separate from SLURM_NETWORK_SUBNET.
-# - SLURM_NETWORK_ADDRESS_OFFSET is added to the last part of the container IP
-#   address to avoid "X.Y.Z.0" for SLURM_PROCID 0.
-SLURM_BIND_GPU = True
-SLURM_CREATE_NETWORK = True
-SLURM_NETWORK_SUBNET = '10.0.0.0/16'
-SLURM_NETWORK_IPRANGE = '10.1.0.0/24'
-SLURM_NETWORK_ADDRESS_OFFSET = 10
