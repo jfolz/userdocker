@@ -216,7 +216,7 @@ def prepare_nvidia_docker_run(args):
 
 def network_name():
     username = getpass.getuser()
-    slurm_jobid = getenv_raise('SLURM_JOBID=176')
+    slurm_jobid = getenv_raise('SLURM_JOBID')
     return username + slurm_jobid
     # slurm_port = getenv_raise('SLURM_SRUN_COMM_PORT')
     # data = (slurm_jobid+slurm_port).encode('ascii')
