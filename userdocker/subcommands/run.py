@@ -6,7 +6,6 @@ import sys
 import os
 import re
 import time
-import getpass
 import ipaddress
 
 from .. import __version__
@@ -215,9 +214,8 @@ def prepare_nvidia_docker_run(args):
 
 
 def network_name():
-    username = getpass.getuser()
     slurm_jobid = getenv_raise('SLURM_JOBID')
-    return username + slurm_jobid
+    return user_name + slurm_jobid
     # slurm_port = getenv_raise('SLURM_SRUN_COMM_PORT')
     # data = (slurm_jobid+slurm_port).encode('ascii')
     # return username + hashlib.sha1(data).hexdigest()
@@ -306,7 +304,7 @@ def exec_cmd_run(args):
             cmd += [
                 '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(0),
                 '--network=%s' % network,
-                '--ip=10.0.0.%d' % ip_address(procid),
+                '--ip=%s' % ip_address(procid),
             ]
 
     # check mounts
