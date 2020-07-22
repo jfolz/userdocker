@@ -253,13 +253,18 @@ NV_USE_CUDA_VISIBLE_DEVICES = True
 # slurm specific options
 # - SLURM_BIND_GPU distributes available GPUs exclusively to the tasks on a node
 #   and sets NV_GPU for the container.
-# - SLURM_MAP_PORT adds a port mapping based on the SLURM_SRUN_COMM_PORT
-#   environment variable. The result is identical for all tasks on all nodes
-#   and accessible as USERDOCKER_MAPPED_PORT environment variable.
-#   Also sets USERDOCKER_FIRST_NODE to the first node in the job.
-# - SLURM_MAP_PORT_MIN is the lowest value for USERDOCKER_MAPPED_PORT.
-# - SLURM_MAP_PORT_MAX is the highest value for USERDOCKER_MAPPED_PORT.
+# - SLURM_CREATE_NETWORK creates an attachable overlay network if SLURM_NNODES is
+#   greater than 1. Each container will attach to this network to enable
+#   communication between them. Each container is assigned an IP address based
+#   on its SLURM_PROCID (from ). The env var USERDOCKER_RANK0_ADDRESS is defined
+#   and gives the IP address of the container with rank 0.
+# - SLURM_NETWORK_SUBNET is the subnet specification for the overlay network.
+# - SLURM_NETWORK_IPRANGE is the range of IP addresses docker can use for services
+#   on the overlay network. Must be separate from SLURM_NETWORK_SUBNET.
+# - SLURM_NETWORK_ADDRESS_OFFSET is added to the last part of the container IP
+#   address to avoid "X.Y.Z.0" for SLURM_PROCID 0.
 SLURM_BIND_GPU = True
-SLURM_MAP_PORT = True
-SLURM_MAP_PORT_MIN = 10000
-SLURM_MAP_PORT_MAX = 32768
+SLURM_CREATE_NETWORK = True
+SLURM_NETWORK_SUBNET = '10.0.0.0/16'
+SLURM_NETWORK_IPRANGE = '10.1.0.0/24'
+SLURM_NETWORK_ADDRESS_OFFSET = 10

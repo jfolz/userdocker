@@ -2,10 +2,12 @@
 
 import argparse
 import logging
+import sys
 import os
 import re
-import hashlib
-import socket
+import time
+import getpass
+import ipaddress
 
 from .. import __version__
 from ..config import ALLOWED_IMAGE_REGEXPS
@@ -20,9 +22,10 @@ from ..config import NV_DEFAULT_GPU_COUNT_RESERVATION
 from ..config import NV_MAX_GPU_COUNT_RESERVATION
 from ..config import NV_USE_CUDA_VISIBLE_DEVICES
 from ..config import SLURM_BIND_GPU
-from ..config import SLURM_MAP_PORT
-from ..config import SLURM_MAP_PORT_MIN
-from ..config import SLURM_MAP_PORT_MAX
+from ..config import SLURM_CREATE_NETWORK
+from ..config import SLURM_NETWORK_SUBNET
+from ..config import SLURM_NETWORK_IPRANGE
+from ..config import SLURM_NETWORK_ADDRESS_OFFSET
 from ..config import PROBE_USED_MOUNTS
 from ..config import RUN_PULL
 from ..config import USER_IN_CONTAINER
@@ -211,6 +214,61 @@ def prepare_nvidia_docker_run(args):
     os.environ['NV_GPU'] = gpu_env
 
 
+def network_name():
+    username = getpass.getuser()
+    slurm_jobid = getenv_raise('SLURM_JOBID=176')
+    return username + slurm_jobid
+    # slurm_port = getenv_raise('SLURM_SRUN_COMM_PORT')
+    # data = (slurm_jobid+slurm_port).encode('ascii')
+    # return username + hashlib.sha1(data).hexdigest()
+
+
+def establish_network(args):
+    procid = int(getenv_raise('SLURM_PROCID'))
+    name = network_name()
+    if procid == 0:
+        cmd = [
+            'docker', 'network', 'create',
+            '--driver=overlay',
+            '--attachable',
+            '--subnet=%s' % SLURM_NETWORK_SUBNET,
+            '--ip-range=%s' % SLURM_NETWORK_IPRANGE,
+            name
+        ]
+        exit_exec_cmd(cmd, dry_run=args.dry_run)
+    return name
+
+
+def prune_network(args):
+    procid = int(getenv_raise('SLURM_PROCID'))
+    if procid == 0:
+        name = network_name()
+        cmd = ['docker', 'network', 'rm', name]
+        return exec_cmd(cmd, dry_run=args.dry_run)
+    else:
+        return 0
+
+
+def ip_address(procid):
+    # TODO IPv6
+    net = SLURM_NETWORK_SUBNET.partition('/')[0].split('.')
+    addr = list(map(int, net))[::-1]
+    available_addresses = 255 - SLURM_NETWORK_ADDRESS_OFFSET
+    addr[0] = (procid + SLURM_NETWORK_ADDRESS_OFFSET) % available_addresses
+    rem = (procid + SLURM_NETWORK_ADDRESS_OFFSET) // available_addresses
+    for i in range(1, len(addr)):
+        available_addresses = 256 - addr[i]
+        addr[i] += rem % available_addresses
+        rem //= available_addresses
+    addr = '.'.join(map(str, addr[::-1]))
+    if ipaddress.ip_address(addr) not in ipaddress.ip_network(SLURM_NETWORK_SUBNET):
+        raise UserDockerException(
+            'Task %d address %s is not in subnet %s. Too many tasks for subnet?'
+            % (procid, addr, SLURM_NETWORK_SUBNET)
+        )
+    return addr
+
+
 def exec_cmd_run(args):
     cmd = init_cmd(args)
 
@@ -228,15 +286,28 @@ def exec_cmd_run(args):
                 "ERROR: given port mapping not allowed: %s" % pm
             )
 
-    # slurm port mapping & communication
-    if SLURM_MAP_PORT and is_slurm_job():
+    # slurm env vars & communication
+    if is_slurm_job():
         procid = int(getenv_raise('SLURM_PROCID'))
+        nnodes = int(getenv_raise('SLURM_NNODES'))
+        ntasks = int(getenv_raise('SLURM_NTASKS'))
         # IP address and env vars for process
-        cmd += ['--ip=10.0.0.%d' % (procid+2),
-                '-e', 'USERDOCKER_RANK0_ADDRESS=10.0.0.2',
-                '-e', 'SLURM_PROCID=%s' % procid,
-                '-e', 'SLURM_NTASKS=%s' % getenv_raise('SLURM_NTASKS'),
-                '-e', 'SLURM_NNODES=%s' % getenv_raise('SLURM_NNODES')]
+        cmd += [
+            '-e', 'SLURM_PROCID=%d' % procid,
+            '-e', 'SLURM_NNODES=%d' % nnodes,
+            '-e', 'SLURM_NTASKS=%d' % ntasks,
+        ]
+        if SLURM_CREATE_NETWORK and nnodes > 1:
+            if procid == 0:
+                network = establish_network(args)
+            else:
+                network = network_name()
+                time.sleep(1)
+            cmd += [
+                '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(0),
+                '--network=%s' % network,
+                '--ip=10.0.0.%d' % ip_address(procid),
+            ]
 
     # check mounts
     mounts = []
@@ -376,4 +447,7 @@ def exec_cmd_run(args):
     cmd.append(img)
     cmd.extend(args.image_args)
 
-    exit_exec_cmd(cmd, dry_run=args.dry_run)
+    ret = exec_cmd(cmd, dry_run=args.dry_run)
+    if is_slurm_job():
+        ret = ret or prune_network(args)
+    sys.exit(ret)
