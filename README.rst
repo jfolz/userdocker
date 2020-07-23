@@ -169,18 +169,32 @@ Slurm is well-suited for distributed training. Jobs can run multiple tasks on
 multiple nodes, where each task handles one or more GPUs. Userdocker can be
 configured to add make setup easier.
 
+To enable distributed training, all worker nodes need to join a docker swarm.
+The head node should be swarm manager. Please refer to the docker documentation
+on how to setup swarm.
+
+Using docker swarm, userdocker allows users to create overlay networks with
+the ``userdocker network create`` command. By default, users can create
+networks within their own namespace, i.e., ``[username]_*``. These networks
+can then be used by containers to communicate. Just add ``--network=[name]``
+to your run command.
+
+Userdocker will also set a couple of environment variables for each container,
+so you can easily setup process groups:
+
 #. The first node hosts rank0, which usually handles the organization of the
-   process group. Userdocker adds the first node from SLURM_NODELIST as
-   USERDOCKER_FIRST_NODE envionment variable to the docker command line.
-#. Set SLURM_MAP_PORT to tell userdocker to derive a PORT from the
-   SLURM_SRUN_COMM_PORT environment variable. A port mapping -p PORT:PORT
-   and USERDOCKER_MAPPED_PORT=PORT are added to the command line. Use with
-   USERDOCKER_FIRST_NODE to connect to the rank0 process.
+   process group. You can access rank0 with the ``USERDOCKER_RANK0_ADDRESS``
+   envionment variable.
+#. ``SLURM_PROCID`` gives the rank of the current process.
+#. ``SLURM_NTASKS`` gives the number of tasks in the job, i.e., the world size
+#. ``SLURM_NNODES`` gives the number of nodes participating in the job.
 #. Slurm uses CUDA_VISIBLE_DEVICES instead of NV_GPU to assign GPUs to tasks.
    Set NV_USE_CUDA_VISIBLE_DEVICES to make userdocker use it as a fallback
    when NV_GPU is not defined.
 #. Slurm does not (yet) bind GPUs to tasks. Set SLURM_BIND_GPU to let
    userdocker distribute and bind them by setting NV_GPU for the container.
+#. By default, ``CUDA_VISIBLE_DEVICES`` will be setup such that GPUs are evenly
+   distributed across containers.
 
 For multi-node training with infiniband, add the devices to ADDITIONAL_ARGS,
 e.g.::
@@ -200,7 +214,7 @@ via NCCL_SOCKET_IFNAME and NCCL_IB_HCA variables::
     ENV_VARS = [
         # sets HOME env var to user's home
         'HOME=' + user_home,
-        'NCCL_SOCKET_IFNAME=eth,mlx5,bond,enp1s0f',
+        'NCCL_SOCKET_IFNAME=eth0,mlx5',
         'NCCL_IB_HCA=mlx5',
     ]
 
