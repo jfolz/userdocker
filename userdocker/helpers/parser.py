@@ -1,33 +1,27 @@
 # -*- coding: utf-8 -*-
 
-import argparse
-from functools import partial
-from fnmatch import fnmatch
-
 from ..config import ARGS_ALWAYS
 from ..config import ARGS_AVAILABLE
+from ..config.arguments import Argument
 
 
-class _PatchThroughAssignmentAction(argparse._AppendAction):
-    """Action that appends not only the value but the option=value to dest.
-
-    Useful for patch through args with assignment like: --shm-size=1g.
-    """
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        super(_PatchThroughAssignmentAction, self).__call__(
-            parser, namespace,
-            values=option_string + '=' + values,
-            option_string=option_string)
-
-
-def _glob_value(pattern, value):
-    """Return value if it matches the given GLOB pattern,
-    else raise ArgumentTypeError.
-    """
-    if fnmatch(value, pattern):
-        return value
-    raise argparse.ArgumentTypeError("value must match pattern %r" % pattern)
+def create_arguments(args, admin_enforced):
+    out_args = []
+    for spec in args:
+        if isinstance(spec, Argument):
+            spec.admin_enforced = admin_enforced
+        elif isinstance(spec, str):
+            # just a single arg as string
+            spec = Argument(spec, admin_enforced=admin_enforced)
+        elif isinstance(spec, (list, tuple)):
+            # aliases as list or tuple
+            spec = Argument(*spec, admin_enforced=admin_enforced)
+        else:
+            raise NotImplementedError(
+                "Cannot understand admin defined ARG %s" % spec
+            )
+        out_args.append(spec)
+    return out_args
 
 
 def init_subcommand_parser(parent_parser, scmd):
@@ -40,61 +34,21 @@ def init_subcommand_parser(parent_parser, scmd):
     )
 
     # patch args through
-    _args_seen = []
-    for args in ARGS_AVAILABLE.get(scmd, []) + ARGS_ALWAYS.get(scmd, []):
-        if isinstance(args, str):
-            # just a single arg as string
-            args = [args]
-        elif isinstance(args, (list, tuple)):
-            # aliases as list or tuple
-            args = list(args)
-        else:
+    _args_seen = set()
+    try:
+        specs = create_arguments(ARGS_AVAILABLE.get(scmd, []), False)
+        specs.extend(create_arguments(ARGS_ALWAYS.get(scmd, []), True))
+    except NotImplementedError as e:
+        raise NotImplementedError("Error parsing config for command %s:" % scmd, *e.args)
+
+    for spec in specs:
+        # raise error when duplicate arguments are detected
+        if any(arg in _args_seen for arg in spec.arguments):
             raise NotImplementedError(
                 "Cannot understand admin defined ARG %s for command %s" % (
-                    args, scmd))
+                    spec, scmd))
+        _args_seen.update(spec.arguments)
 
-        # remove dups (e.g. from being in AVAILABLE and ALWAYS)
-        args = [arg for arg in args if arg not in _args_seen]
-        _args_seen.extend(args)
-        if not args:
-            continue
-
-        for arg in args:
-            # make sure each arg starts with - and doesn't contain ' '
-            if not arg.startswith('-') or ' ' in arg:
-                raise NotImplementedError(
-                    "Cannot understand admin defined ARG %s for command %s" % (
-                        arg, scmd))
-            if '=' in arg:
-                if len(args) != 1:
-                    raise NotImplementedError(
-                        "Only supports single string args with values: "
-                        "%s for command %s" % (arg, scmd))
-
-        h = "see docker help"
-        if set(args) & set(ARGS_ALWAYS.get(scmd, [])):
-            h += ' (enforced by admin)'
-
-        s = args[0]
-        if '=' in s:
-            arg, val = s.split('=')
-            args = [arg]
-            kwds = {
-                "help": h,
-                "action": _PatchThroughAssignmentAction,
-                "dest": "patch_through_args",
-            }
-            if "*" in val:
-                kwds["type"] = partial(_glob_value, val)
-            else:
-                kwds["choices"] = [val]
-        else:
-            kwds = {
-                "help": h,
-                "action": "append_const",
-                "const": s,
-                "dest": "patch_through_args",
-            }
-        parser.add_argument(*args, **kwds)
+        parser.add_argument(*spec.arguments, **spec.kwds)
 
     return parser

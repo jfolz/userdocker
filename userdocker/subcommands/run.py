@@ -246,28 +246,6 @@ def exec_cmd_run(args):
                 "ERROR: given port mapping not allowed: %s" % pm
             )
 
-    # slurm env vars & communication
-    if is_slurm_job():
-        procid = int(getenv_raise('SLURM_PROCID'))
-        nnodes = int(getenv_raise('SLURM_NNODES'))
-        ntasks = int(getenv_raise('SLURM_NTASKS'))
-        # IP address and env vars for process
-        cmd += [
-            '-e', 'SLURM_PROCID=%d' % procid,
-            '-e', 'SLURM_NNODES=%d' % nnodes,
-            '-e', 'SLURM_NTASKS=%d' % ntasks,
-        ]
-
-    # if network arg is defined, add ip address
-    for arg in args.patch_through_args:
-        if arg.startswith("--network"):
-            _, _, network = arg.partition("=")
-            procid = int(getenv_raise('SLURM_PROCID'))
-            cmd += [
-                '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(0),
-                '--ip=%s' % ip_address(procid),
-            ]
-
     # check mounts
     mounts = []
     mounts_available = \
@@ -325,10 +303,11 @@ def exec_cmd_run(args):
             )
         cmd += ["-v", mount]
 
-
+    # setup environment with nvidia-specific options
     if args.executor == 'nvidia-docker':
         prepare_nvidia_docker_run(args)
 
+    # userdocker environment
     env_vars = ENV_VARS + ENV_VARS_EXT.get(args.executor, [])
     env_vars += [
         "USERDOCKER=%s" % __version__,
@@ -343,7 +322,29 @@ def exec_cmd_run(args):
     for env_var in env_vars:
         cmd += ['-e', env_var]
 
+    # slurm env vars & communication
+    if is_slurm_job():
+        procid = int(getenv_raise('SLURM_PROCID'))
+        nnodes = int(getenv_raise('SLURM_NNODES'))
+        ntasks = int(getenv_raise('SLURM_NTASKS'))
+        # IP address and env vars for process
+        cmd += [
+            '-e', 'SLURM_PROCID=%d' % procid,
+            '-e', 'SLURM_NNODES=%d' % nnodes,
+            '-e', 'SLURM_NTASKS=%d' % ntasks,
+        ]
 
+    # if network arg is defined, add ip address
+    for arg in args.patch_through_args:
+        if arg.startswith("--network"):
+            _, _, network = arg.partition("=")
+            procid = int(getenv_raise('SLURM_PROCID'))
+            cmd += [
+                '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(0),
+                '--ip=%s' % ip_address(procid),
+            ]
+
+    # set user inside container
     if USER_IN_CONTAINER:
         cmd += ["-u", "%d:%d" % (uid, gid)]
 

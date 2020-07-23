@@ -9,7 +9,6 @@
 # The following (python) variables may be used throughout config files (see
 # VOLUME_MOUNTS_DEFAULT or ENV_VARS for an example):
 from . import uid, gid, user_name, group_name, user_home
-# (if you like, you can remove the line without any effect)
 #
 # The order of config files is (if existing):
 # - package defaults
@@ -41,6 +40,8 @@ from . import uid, gid, user_name, group_name, user_home
 # This means that config_99_adm.py can grant users in group adm a lot more
 # permissions (reliably), even if they are also in the udocker group.
 ################################################################################
+
+from .arguments import GlobArgument
 
 # Admin default value for userdocker log level:
 # ['DEBUG', 'INFO', 'WARNING', 'ERROR']
@@ -139,7 +140,7 @@ ARGS_AVAILABLE = {
         # users can map all exposed container ports to random free host ports:
         ('-P', '--publish-all'),
         # '--shm-size=16g',  # allows users to set shared mem size
-        '--network=%s*' % user_name,
+        GlobArgument('%s_*' % user_name, '--network'),
     ],
 }
 
