@@ -6,6 +6,7 @@ from ..helpers.cmd import init_cmd
 from ..helpers.execute import exit_exec_cmd
 from ..helpers.parser import init_subcommand_parser
 from ..config import user_name
+from ..config import EXECUTORS
 
 
 def prefixed_string(v, prefix):
@@ -41,6 +42,8 @@ def parser_network(parser):
 
 
 def exec_cmd_network(args):
+    args.executor = "docker"
+    args.executor_path = EXECUTORS["docker"]
     cmd = init_cmd(args)
     create_args = cmd[2:]
     cmd = cmd[:2]
