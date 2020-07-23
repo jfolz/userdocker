@@ -101,7 +101,7 @@ ARGS_ALWAYS = {
         '--driver=overlay',
         '--subnet=%s' % SLURM_NETWORK_SUBNET,
         '--ip-range=%s' % SLURM_NETWORK_IPRANGE,
-    ]
+    ],
 }
 
 # The following arguments are available to the user for the
