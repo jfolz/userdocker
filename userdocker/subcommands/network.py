@@ -58,6 +58,7 @@ def exec_cmd_network(args):
         cmd.append(args.network)
     elif args.action == "rm":
         cmd.append(args.action)
+        cmd.append(args.network)
     elif args.action == "ls":
         cmd.append(args.action)
 
