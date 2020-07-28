@@ -5,10 +5,8 @@ import logging
 import os
 import re
 import ipaddress
-import json
 
 from .. import __version__
-from ..config import EXECUTORS
 from ..config import ALLOWED_IMAGE_REGEXPS
 from ..config import ALLOWED_PORT_MAPPINGS
 from ..config import CAPS_ADD
@@ -39,6 +37,7 @@ from ..helpers.execute import exit_exec_cmd
 from ..helpers.logger import logger
 from ..helpers.nvidia import nvidia_get_available_gpus
 from ..helpers.parser import init_subcommand_parser
+from .network import prefixed_string
 
 
 def parser_run(parser):
@@ -99,9 +98,12 @@ def parser_run(parser):
     )
 
 
-def getenv_raise(key, default=None, msg='{} environment variable is not set'):
+__canary = object()
+
+
+def getenv_raise(key, default=__canary, msg='{} environment variable is not set'):
     v = os.getenv(key, default)
-    if v is None:
+    if v is __canary:
         raise UserDockerException(msg.format(key))
     return v
 
@@ -230,25 +232,19 @@ def ip_address(subnet, procid):
     return addr
 
 
-def inspect_network(network):
-    cmd = [EXECUTORS["docker"], "network", "inspect", network]
-    jsontext = exec_cmd(cmd, return_status=False)
-    for details in json.loads(jsontext):
-        if details["Name"] == network:
-            return details
-
-
-def set_ip_address(args):
+def set_network_ip_address():
     cmd = []
-    for arg in args.patch_through_args:
-        if arg.startswith("--network"):
-            _, _, network = arg.partition("=")
-            procid = int(getenv_raise('SLURM_PROCID'))
-            subnet = inspect_network(network)["IPAM"]["Config"]["Subnet"]
-            cmd += [
-                '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(subnet, 0),
-                '--ip=%s' % ip_address(subnet, procid),
-            ]
+    network = getenv_raise('USERDOCKER_NETWORK_NAME', None)
+    if network is not None:
+        if prefixed_string(network) != network:
+            raise UserDockerException()
+        subnet = getenv_raise('USERDOCKER_NETWORK_SUBNET')
+        procid = int(getenv_raise('SLURM_PROCID'))
+        cmd += [
+            '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(subnet, 0),
+            '--network', network,
+            '--ip', ip_address(subnet, procid),
+        ]
     return cmd
 
 
@@ -358,7 +354,7 @@ def exec_cmd_run(args):
         ]
 
     # if network arg is defined, add ip address
-    cmd += set_ip_address(args)
+    cmd += set_network_ip_address()
 
     # set user inside container
     if USER_IN_CONTAINER:

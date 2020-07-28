@@ -140,7 +140,7 @@ ARGS_AVAILABLE = {
         # users can map all exposed container ports to random free host ports:
         ('-P', '--publish-all'),
         # '--shm-size=16g',  # allows users to set shared mem size
-        GlobArgument('%s_*' % user_name, '--network'),
+        # GlobArgument('%s_*' % user_name, '--network'),
     ],
 }
 
