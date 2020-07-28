@@ -75,7 +75,7 @@ def exec_cmd_network(args):
         details = inspect_network(args.network)
         if details is None:
             raise UserDockerException("No such network: %s" % args.network)
-        subnet = details["IPAM"]["Config"]["Subnet"]
+        subnet = details["IPAM"]["Config"][0]["Subnet"]
         print("USERDOCKER_NETWORK_NAME=%s" % args.network,
               "USERDOCKER_NETWORK_SUBNET=%s" % subnet)
         sys.exit(0)
