@@ -259,13 +259,13 @@ def container_name():
     return ['--name', name]
 
 
-def handle_sigterm_docker_stop(*_, **__):
+def handle_signal_docker_stop(*_, **__):
     cmd = [
         EXECUTORS["docker"],
         "stop",
         os.environ["USERDOCKER_CONTAINER_NAME"]
     ]
-    exec_cmd(cmd)
+    exit_exec_cmd(cmd)
 
 
 def exec_cmd_run(args):
@@ -442,7 +442,8 @@ def exec_cmd_run(args):
     cmd.append(img)
     cmd.extend(args.image_args)
 
-    # install the SIGTERM handler to stop the container
-    signal.signal(signal.SIGTERM, handle_sigterm_docker_stop)
+    # install SIGINT and SIGTERM handlers to stop the container
+    signal.signal(signal.SIGINT, handle_signal_docker_stop)
+    signal.signal(signal.SIGTERM, handle_signal_docker_stop)
 
     exit_exec_cmd(cmd, dry_run=args.dry_run)
