@@ -5,8 +5,10 @@ import logging
 import os
 import re
 import ipaddress
+import json
 
 from .. import __version__
+from ..config import EXECUTORS
 from ..config import ALLOWED_IMAGE_REGEXPS
 from ..config import ALLOWED_PORT_MAPPINGS
 from ..config import CAPS_ADD
@@ -19,7 +21,6 @@ from ..config import NV_DEFAULT_GPU_COUNT_RESERVATION
 from ..config import NV_MAX_GPU_COUNT_RESERVATION
 from ..config import NV_USE_CUDA_VISIBLE_DEVICES
 from ..config import SLURM_BIND_GPU
-from ..config import SLURM_NETWORK_SUBNET
 from ..config import SLURM_NETWORK_ADDRESS_OFFSET
 from ..config import PROBE_USED_MOUNTS
 from ..config import RUN_PULL
@@ -209,9 +210,9 @@ def prepare_nvidia_docker_run(args):
     os.environ['NV_GPU'] = gpu_env
 
 
-def ip_address(procid):
+def ip_address(subnet, procid):
     # TODO IPv6
-    net = SLURM_NETWORK_SUBNET.partition('/')[0].split('.')
+    net = subnet.partition('/')[0].split('.')
     addr = list(map(int, net))[::-1]
     available_addresses = 255 - SLURM_NETWORK_ADDRESS_OFFSET
     addr[0] = (procid + SLURM_NETWORK_ADDRESS_OFFSET) % available_addresses
@@ -221,12 +222,34 @@ def ip_address(procid):
         addr[i] += rem % available_addresses
         rem //= available_addresses
     addr = '.'.join(map(str, addr[::-1]))
-    if ipaddress.ip_address(addr) not in ipaddress.ip_network(SLURM_NETWORK_SUBNET):
+    if ipaddress.ip_address(addr) not in ipaddress.ip_network(subnet):
         raise UserDockerException(
             'Task %d address %s is not in subnet %s. Too many tasks for subnet?'
-            % (procid, addr, SLURM_NETWORK_SUBNET)
+            % (procid, addr, subnet)
         )
     return addr
+
+
+def inspect_network(network):
+    cmd = [EXECUTORS["docker"], "network", "inspect", network]
+    jsontext = exec_cmd(cmd, return_status=False)
+    for details in json.loads(jsontext):
+        if details["Name"] == network:
+            return details
+
+
+def set_ip_address(args):
+    cmd = []
+    for arg in args.patch_through_args:
+        if arg.startswith("--network"):
+            _, _, network = arg.partition("=")
+            procid = int(getenv_raise('SLURM_PROCID'))
+            subnet = inspect_network["IPAM"]["Config"]["Subnet"]
+            cmd += [
+                '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(subnet, 0),
+                '--ip=%s' % ip_address(subnet, procid),
+            ]
+    return cmd
 
 
 def exec_cmd_run(args):
@@ -335,14 +358,7 @@ def exec_cmd_run(args):
         ]
 
     # if network arg is defined, add ip address
-    for arg in args.patch_through_args:
-        if arg.startswith("--network"):
-            _, _, network = arg.partition("=")
-            procid = int(getenv_raise('SLURM_PROCID'))
-            cmd += [
-                '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(0),
-                '--ip=%s' % ip_address(procid),
-            ]
+    cmd += set_ip_address(args)
 
     # set user inside container
     if USER_IN_CONTAINER:
