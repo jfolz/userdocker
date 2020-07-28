@@ -5,8 +5,11 @@ import logging
 import os
 import re
 import ipaddress
+import time
+import signal
 
 from .. import __version__
+from ..config import EXECUTORS
 from ..config import ALLOWED_IMAGE_REGEXPS
 from ..config import ALLOWED_PORT_MAPPINGS
 from ..config import CAPS_ADD
@@ -248,8 +251,28 @@ def set_network_ip_address():
     return cmd
 
 
+def container_name():
+    jobid = getenv_raise('SLURM_JOBID', str(time.time())[-4:])
+    procid = getenv_raise('SLURM_PROCID', str(os.getpid()))
+    name = '%s_%s_%s' % (user_name, jobid, procid)
+    os.environ["USERDOCKER_CONTAINER_NAME"] = name
+    return ['--name', name]
+
+
+def handle_sigterm_docker_stop(*_, **__):
+    cmd = [
+        EXECUTORS["docker"],
+        "stop",
+        os.environ["USERDOCKER_CONTAINER_NAME"]
+    ]
+    exec_cmd(cmd)
+
+
 def exec_cmd_run(args):
     cmd = init_cmd(args)
+
+    # container name
+    cmd += container_name()
 
     # add additional args first
     cmd.extend(ADDITIONAL_ARGS)
@@ -418,5 +441,8 @@ def exec_cmd_run(args):
 
     cmd.append(img)
     cmd.extend(args.image_args)
+
+    # install the SIGTERM handler to stop the container
+    signal.signal(signal.SIGTERM, handle_sigterm_docker_stop)
 
     exit_exec_cmd(cmd, dry_run=args.dry_run)
