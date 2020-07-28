@@ -244,7 +244,7 @@ def set_ip_address(args):
         if arg.startswith("--network"):
             _, _, network = arg.partition("=")
             procid = int(getenv_raise('SLURM_PROCID'))
-            subnet = inspect_network["IPAM"]["Config"]["Subnet"]
+            subnet = inspect_network(network)["IPAM"]["Config"]["Subnet"]
             cmd += [
                 '-e', 'USERDOCKER_RANK0_ADDRESS=%s' % ip_address(subnet, 0),
                 '--ip=%s' % ip_address(subnet, procid),
