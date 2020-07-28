@@ -38,6 +38,9 @@ def parser_network(parser):
     rm_parser = action_parser.add_parser("rm")
     _network_argument(rm_parser)
 
+    inspect_parser = action_parser.add_parser("inspect")
+    _network_argument(inspect_parser)
+
     action_parser.add_parser("ls")
 
 
@@ -47,19 +50,11 @@ def exec_cmd_network(args):
     cmd = init_cmd(args)
     create_args = cmd[2:]
     cmd = cmd[:2]
+    cmd.append(args.action)
 
-    if args.action in ("create", "rm") and not args.network:
-        raise argparse.ArgumentTypeError(
-            "the following arguments are required: network",
-        )
     if args.action == "create":
-        cmd.append(args.action)
         cmd.extend(create_args)
+    if args.action in ("create", "rm", "inspect"):
         cmd.append(args.network)
-    elif args.action == "rm":
-        cmd.append(args.action)
-        cmd.append(args.network)
-    elif args.action == "ls":
-        cmd.append(args.action)
 
     exit_exec_cmd(cmd, dry_run=args.dry_run)
