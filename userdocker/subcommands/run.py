@@ -8,7 +8,8 @@ import ipaddress
 import time
 import signal
 import sys
-import subprocess
+
+import daemon
 
 from .. import __version__
 from ..config import EXECUTORS
@@ -264,12 +265,12 @@ def container_name():
 def handle_signal_docker_stop(*_, **__):
     cmd = [
         EXECUTORS["docker"],
-        "kill",
+        "stop",
         os.environ["USERDOCKER_CONTAINER_NAME"],
     ]
-    os.spawnl(os.P_NOWAIT, *cmd)
     logging.info(' '.join(cmd))
-    time.sleep(5)
+    with daemon.DaemonContext():
+        exec_cmd(cmd)
     sys.exit(1)
 
 
