@@ -7,6 +7,7 @@ import re
 import ipaddress
 import time
 import signal
+import sys
 
 from .. import __version__
 from ..config import EXECUTORS
@@ -260,12 +261,21 @@ def container_name():
 
 
 def handle_signal_docker_stop(*_, **__):
-    cmd = [
+    cmd_exists = [
+        EXECUTORS["docker"],
+        "ps",
+        "-q",
+        "-f",
+        "name=", os.environ["USERDOCKER_CONTAINER_NAME"],
+    ]
+    cmd_stop = [
         EXECUTORS["docker"],
         "stop",
-        os.environ["USERDOCKER_CONTAINER_NAME"]
+        os.environ["USERDOCKER_CONTAINER_NAME"],
     ]
-    exit_exec_cmd(cmd)
+    while exec_cmd(cmd_exists, return_status=False):
+        exec_cmd(cmd_stop)
+    sys.exit(1)
 
 
 def exec_cmd_run(args):
