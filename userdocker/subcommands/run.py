@@ -266,7 +266,7 @@ def handle_signal_docker_stop(*_, **__):
         "ps",
         "-q",
         "-f",
-        "name='%s'" % os.environ["USERDOCKER_CONTAINER_NAME"],
+        "name=%s" % os.environ["USERDOCKER_CONTAINER_NAME"],
     ]
     cmd_stop = [
         EXECUTORS["docker"],
