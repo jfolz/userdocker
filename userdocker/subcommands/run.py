@@ -266,18 +266,10 @@ def handle_signal_docker_stop(*_, **__):
         EXECUTORS["docker"],
         "kill",
         os.environ["USERDOCKER_CONTAINER_NAME"],
-        "&",
     ]
+    os.spawnl(os.P_NOWAIT, *cmd)
     logging.info(' '.join(cmd))
-    proc = subprocess.Popen(
-        cmd,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        shell=True,
-        start_new_session=True,
-    )
-    proc.wait()
+    time.sleep(5)
     sys.exit(1)
 
 
