@@ -261,20 +261,12 @@ def container_name():
 
 
 def handle_signal_docker_stop(*_, **__):
-    cmd_exists = [
+    cmd_stop = '%s stop "%s" &' % (
         EXECUTORS["docker"],
-        "ps",
-        "-q",
-        "-f",
-        "name=%s" % os.environ["USERDOCKER_CONTAINER_NAME"],
-    ]
-    cmd_stop = [
-        EXECUTORS["docker"],
-        "stop",
-        os.environ["USERDOCKER_CONTAINER_NAME"],
-    ]
-    while exec_cmd(cmd_exists, return_status=False):
-        exec_cmd(cmd_stop)
+        os.environ["USERDOCKER_CONTAINER_NAME"]
+    )
+    logging.info(cmd_stop)
+    os.system(cmd_stop)
     sys.exit(1)
 
 
