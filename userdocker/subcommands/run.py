@@ -270,6 +270,7 @@ def handle_signal_docker_stop(*_, **__):
     ]
     for _ in range(10):
         os.system(" ".join(cmd))
+        time.sleep(1)
     sys.exit(1)
 
 
