@@ -265,7 +265,7 @@ def container_name():
 def handle_signal_docker_stop(*_, **__):
     cmd = [
         "/usr/bin/systemd-run",
-        EXECUTORS["docker"], "kill",
+        EXECUTORS["docker"], "stop",
         os.environ["USERDOCKER_CONTAINER_NAME"],
     ]
     for _ in range(10):
