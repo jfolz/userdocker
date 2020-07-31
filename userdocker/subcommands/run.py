@@ -9,8 +9,6 @@ import time
 import signal
 import sys
 
-import daemon
-
 from .. import __version__
 from ..config import EXECUTORS
 from ..config import ALLOWED_IMAGE_REGEXPS
@@ -43,6 +41,7 @@ from ..helpers.execute import exit_exec_cmd
 from ..helpers.logger import logger
 from ..helpers.nvidia import nvidia_get_available_gpus
 from ..helpers.parser import init_subcommand_parser
+from ..helpers.logger import logger
 from .network import prefixed_string
 
 
@@ -265,22 +264,12 @@ def container_name():
 def handle_signal_docker_stop(*_, **__):
     cmd = [
         EXECUTORS["docker"],
-        "stop",
+        "kill",
         os.environ["USERDOCKER_CONTAINER_NAME"],
     ]
-    logging.info(' '.join(cmd))
-    with daemon.DaemonContext():
-        exec_cmd(cmd)
+    exec_cmd(cmd)
+    logger.info(' '.join(cmd))
     sys.exit(1)
-
-
-def use_same_cgroup():
-    lines = exec_cmd(
-        ["/bin/ps", "-o", "cgroup", str(os.getpid())],
-        return_status=False
-    ).splitlines()
-    cgroup = lines[1]  # .strip(' \n')
-    return ["--cgroup-parent", cgroup]
 
 
 def exec_cmd_run(args):
@@ -288,9 +277,6 @@ def exec_cmd_run(args):
 
     # container name
     cmd += container_name()
-
-    # sets --cgroup-parent to current cgroup
-    cmd += use_same_cgroup()
 
     # add additional args first
     cmd.extend(ADDITIONAL_ARGS)
@@ -461,7 +447,7 @@ def exec_cmd_run(args):
     cmd.extend(args.image_args)
 
     # install SIGINT and SIGTERM handlers to stop the container
-    # signal.signal(signal.SIGINT, handle_signal_docker_stop)
-    # signal.signal(signal.SIGTERM, handle_signal_docker_stop)
+    signal.signal(signal.SIGINT, handle_signal_docker_stop)
+    signal.signal(signal.SIGTERM, handle_signal_docker_stop)
 
     exit_exec_cmd(cmd, dry_run=args.dry_run)

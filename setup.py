@@ -49,5 +49,4 @@ setup(
     data_files=[('/etc/userdocker/', ['userdocker/config/default.py'])],
     entry_points={'console_scripts': ['userdocker=userdocker.userdocker:main']},
     zip_safe=True,
-    install_requires=['python-daemon']
 )
