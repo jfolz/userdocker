@@ -263,47 +263,13 @@ def container_name():
 
 
 def handle_signal_docker_stop(*_, **__):
-    # get all PIDs in container
-    cmd = [
-        EXECUTORS["docker"], "top",
-        os.environ["USERDOCKER_CONTAINER_NAME"],
-        "--format", "pid",
-    ]
-    pids = exec_cmd(cmd, return_status=False).splitlines()[1:]
-    pids = [int(pid) for pid in pids]
-    logger.info(
-        os.environ["USERDOCKER_CONTAINER_NAME"]
-        + " PIDs: "
-        + (", ".join(map(str, pids)))
-    )
-
-    # send SIGINT, then SIGTERM; finally SIGKILL
-    for pid in pids:
-        os.kill(pid, signal.SIGINT)
-    time.sleep(1)
-    for pid in pids:
-        os.kill(pid, signal.SIGTERM)
-    time.sleep(1)
-    for pid in pids:
-        os.kill(pid, signal.SIGKILL)
-
-    # for good measure try docker stop
-    cmd = [
-        "/usr/bin/systemd-run",
-        EXECUTORS["docker"], "stop",
-        os.environ["USERDOCKER_CONTAINER_NAME"],
-    ]
-    exec_cmd(cmd)
-
-    # also docker kill
     cmd = [
         "/usr/bin/systemd-run",
         EXECUTORS["docker"], "kill",
         os.environ["USERDOCKER_CONTAINER_NAME"],
     ]
-    exec_cmd(cmd)
-
-    # bye!
+    for _ in range(10):
+        os.system(" ".join(cmd))
     sys.exit(1)
 
 
