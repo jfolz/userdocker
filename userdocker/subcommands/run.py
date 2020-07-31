@@ -276,7 +276,7 @@ def handle_signal_docker_stop(*_, **__):
 
 def use_same_cgroup():
     lines = exec_cmd(
-        ["/usr/bin/ps", "-o", "cgroup", str(os.getpid())],
+        ["/bin/ps", "-o", "cgroup", str(os.getpid())],
         return_status=False
     ).splitlines()
     cgroup = lines[1]  # .strip(' \n')
