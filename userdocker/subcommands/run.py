@@ -274,11 +274,23 @@ def handle_signal_docker_stop(*_, **__):
     sys.exit(1)
 
 
+def use_same_cgroup():
+    lines = exec_cmd(
+        ["/usr/bin/ps", "-o", "cgroup", str(os.getpid())],
+        return_status=False
+    ).splitlines()
+    cgroup = lines[1]  # .strip(' \n')
+    return ["--cgroup-parent", cgroup]
+
+
 def exec_cmd_run(args):
     cmd = init_cmd(args)
 
     # container name
     cmd += container_name()
+
+    # sets --cgroup-parent to current cgroup
+    cmd += use_same_cgroup()
 
     # add additional args first
     cmd.extend(ADDITIONAL_ARGS)
@@ -449,7 +461,7 @@ def exec_cmd_run(args):
     cmd.extend(args.image_args)
 
     # install SIGINT and SIGTERM handlers to stop the container
-    signal.signal(signal.SIGINT, handle_signal_docker_stop)
-    signal.signal(signal.SIGTERM, handle_signal_docker_stop)
+    # signal.signal(signal.SIGINT, handle_signal_docker_stop)
+    # signal.signal(signal.SIGTERM, handle_signal_docker_stop)
 
     exit_exec_cmd(cmd, dry_run=args.dry_run)
